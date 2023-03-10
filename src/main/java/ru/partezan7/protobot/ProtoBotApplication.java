@@ -11,6 +11,8 @@ public class ProtoBotApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(ProtoBotApplication.class, args);
+        PropertiesLoader propertiesLoader = new PropertiesLoader();
+        propertiesLoader.load();
         try {
             TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
             telegramBotsApi.registerBot(new Bot());
