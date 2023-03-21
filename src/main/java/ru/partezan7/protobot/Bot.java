@@ -1,11 +1,16 @@
 package ru.partezan7.protobot;
 
+import org.apache.commons.io.FileUtils;
+import org.json.JSONObject;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.*;
+import java.net.URL;
 import java.util.List;
 
 public class Bot extends TelegramLongPollingBot {
@@ -37,26 +42,54 @@ public class Bot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         try {
-            if (update.hasMessage() && update.getMessage().hasText()) {
+            if (update.hasMessage()) {
                 //Извлекаем из объекта сообщение пользователя
-                Message inMess = update.getMessage();
-                //Достаем из inMess id чата пользователя
-                String chatId = inMess.getChatId().toString();
-                //Получаем текст сообщения пользователя, отправляем в написанный нами обработчик
-                String response = parseMessage(inMess.getText());
-                //Создаем объект класса SendMessage - наш будущий ответ пользователю
-                SendMessage outMess = new SendMessage();
+                Message message = update.getMessage();
+                if (message.hasText()) {
+                    //Достаем из inMess id чата пользователя
+                    String chatId = message.getChatId().toString();
+                    //Получаем текст сообщения пользователя, отправляем в написанный нами обработчик
+                    String response = parseMessage(message.getText());
+                    //Создаем объект класса SendMessage - наш будущий ответ пользователю
+                    SendMessage outMess = new SendMessage();
 
-                //Добавляем в наше сообщение id чата а также наш ответ
-                outMess.setChatId(chatId);
-                outMess.setText(response);
+                    //Добавляем в наше сообщение id чата а также наш ответ
+                    outMess.setChatId(chatId);
+                    outMess.setText(response);
 
-                //Отправка в чат
-                execute(outMess);
+                    //Отправка в чат
+                    execute(outMess);
+                } else {
+                    Document document = message.getDocument();
+                    saveFile(document);
+                }
             }
-        } catch (TelegramApiException e) {
+
+
+        } catch (TelegramApiException | IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private boolean saveFile(Document document) throws IOException {
+        if (document != null) {
+            final String fileId = document.getFileId();
+            final String fileName = document.getFileName();
+
+            URL url = new URL("https://api.telegram.org/bot" + BOT_TOKEN + "/getFile?file_id=" + fileId);
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(url.openStream()));
+            String getFileResponse = br.readLine();
+
+            JSONObject json = new JSONObject(getFileResponse);
+            JSONObject result = json.getJSONObject("result");
+            String filePath = result.getString("file_path");
+
+            File localFile = new File("src/main/resources/saved_files/" + fileName);
+            InputStream is = new URL("https://api.telegram.org/file/bot" + BOT_TOKEN + "/" + filePath).openStream();
+            FileUtils.copyInputStreamToFile(is, localFile);
+        }
+        return false;
     }
 
     @Override
