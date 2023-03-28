@@ -7,6 +7,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 //import org.springframework.beans.factory.annotation.Autowired;
@@ -24,11 +25,6 @@ public class Bot extends TelegramLongPollingBot {
     //вместо звездочек подставляйте свои данные
     final private String BOT_TOKEN = System.getProperty("bot.BOT_TOKEN");
     final private String BOT_NAME = System.getProperty("bot.BOT_NAME");
-    Storage storage;
-
-    Bot() {
-        storage = new Storage();
-    }
 
     @Override
     public String getBotUsername() {
@@ -54,16 +50,24 @@ public class Bot extends TelegramLongPollingBot {
                 //Достаем из inMess id чата пользователя
                 String chatId = message.getChatId().toString();
 
-                String responseBody;
-
+                String responseBody = "Ошибка сохранения: формат сообщения не определён";
                 if (message.hasText()) {
                     //Получаем текст сообщения пользователя, отправляем в написанный нами обработчик
-                    responseBody = parseMessage(message.getText());
-                } else {
-                    Document document = message.getDocument();
-                    boolean isSuccessful = saveFile(document);
-                    responseBody = isSuccessful ? "Успешно сохранено" : "Ошибка сохранения";
+                    responseBody = saveText(message.getText());
                 }
+                if (message.hasDocument()) {
+                    responseBody = saveDocument(message.getDocument());
+                }
+                if (message.hasPhoto()) {
+                    List<PhotoSize> photos = message.getPhoto();
+                    if (photos != null && photos.size() > 0) {
+                        List<String> responses = message.getPhoto().stream().map(this::savePhoto).toList();
+                        StringBuilder stringBuilder = new StringBuilder();
+                        responses.forEach(resp -> stringBuilder.append(resp + "\n"));
+                        responseBody = stringBuilder.toString();
+                    }
+                }
+
                 //Создаем объект класса SendMessage - наш будущий ответ пользователю
                 SendMessage response = new SendMessage();
                 //Добавляем в наше сообщение id чата а также наш ответ
@@ -79,7 +83,34 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
-    private boolean saveFile(Document document) {
+    private String savePhoto(PhotoSize photo) {
+        String response = "";
+        String fileId = photo.getFileId();
+        String fileUniqueId = photo.getFileUniqueId();
+        try {
+            URL url = new URL("https://api.telegram.org/bot" + BOT_TOKEN + "/getFile?file_id=" + fileId);
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(url.openStream()));
+            String getFileResponse = br.readLine();
+
+            JSONObject json = new JSONObject(getFileResponse);
+            JSONObject result = json.getJSONObject("result");
+            String filePath = result.getString("file_path");
+
+            File localFile = new File("src/main/resources/saved_files/" + fileUniqueId);
+            InputStream is = new URL("https://api.telegram.org/file/bot" + BOT_TOKEN + "/" + filePath).openStream();
+            FileUtils.copyInputStreamToFile(is, localFile);
+            System.out.println(LocalDateTime.now() + " file \"" + fileUniqueId + "\" is saved");
+            response = "Файла: \"" + fileUniqueId + "\",  сохранён";
+        } catch (IOException exception) {
+            System.out.println(LocalDateTime.now() + " file \"" + fileUniqueId + "\" is NOT saved");
+            response = "Ошибка при сохранении файла: " + fileUniqueId;
+        }
+        return response;
+    }
+
+    private String saveDocument(Document document) {
+        String response = "";
         if (document != null) {
             final String fileId = document.getFileId();
             final String fileName = document.getFileName();
@@ -98,14 +129,14 @@ public class Bot extends TelegramLongPollingBot {
                 InputStream is = new URL("https://api.telegram.org/file/bot" + BOT_TOKEN + "/" + filePath).openStream();
                 FileUtils.copyInputStreamToFile(is, localFile);
                 System.out.println(LocalDateTime.now() + " file \"" + fileName + "\" is saved");
-
+                response = "Файла: \"" + fileName + "\",  сохранён";
             } catch (IOException exception) {
                 System.out.println(LocalDateTime.now() + " file \"" + fileName + "\" is NOT saved");
-                return false;
+                response = "Ошибка при сохранении файла: " + fileName;
             }
         }
 
-        return true;
+        return response;
     }
 
     @Override
@@ -113,16 +144,16 @@ public class Bot extends TelegramLongPollingBot {
         super.onUpdatesReceived(updates);
     }
 
-    public String parseMessage(String textMsg) {
+    public String saveText(String textMsg) {
         String response;
 
         //Сравниваем текст пользователя с нашими командами, на основе этого формируем ответ
         if (textMsg.equals("/start"))
-            response = "Приветствую, бот знает много цитат. Жми /get, чтобы получить случайную из них";
+            response = "Жми /get, чтобы получить случайное число от 1 до 100";
         else if (textMsg.equals("/get"))
-            response = storage.getRandQuote();
+            response = Double.toString(Math.random() * 100);
         else
-            response = "Сообщение не распознано";
+            response = "Сообщение не сохранено";
 
         return response;
     }
