@@ -4,15 +4,14 @@ import org.apache.commons.io.FileUtils;
 import org.json.JSONObject;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-//import org.springframework.beans.factory.annotation.Autowired;
-//import org.springframework.core.env.Environment;
-//import ru.partezan7.protobot.service.ChatGPTService;
+
 
 import java.io.*;
 import java.net.URL;
@@ -61,10 +60,8 @@ public class Bot extends TelegramLongPollingBot {
                 if (message.hasPhoto()) {
                     List<PhotoSize> photos = message.getPhoto();
                     if (photos != null && photos.size() > 0) {
-                        List<String> responses = message.getPhoto().stream().map(this::savePhoto).toList();
-                        StringBuilder stringBuilder = new StringBuilder();
-                        responses.forEach(resp -> stringBuilder.append(resp + "\n"));
-                        responseBody = stringBuilder.toString();
+                        PhotoSize photoSize = message.getPhoto().get(3); // Max size
+                        responseBody = savePhoto(photoSize);
                     }
                 }
 
@@ -83,29 +80,25 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
+    private static int count = 1;
+
     private String savePhoto(PhotoSize photo) {
         String response = "";
-        String fileId = photo.getFileId();
-        String fileUniqueId = photo.getFileUniqueId();
+        GetFile getFile = new GetFile(photo.getFileId());
+        String fileId = photo.getFileUniqueId();
+        String fileName = fileId + count + ".png";
+
         try {
-            URL url = new URL("https://api.telegram.org/bot" + BOT_TOKEN + "/getFile?file_id=" + fileId);
-
-            BufferedReader br = new BufferedReader(new InputStreamReader(url.openStream()));
-            String getFileResponse = br.readLine();
-
-            JSONObject json = new JSONObject(getFileResponse);
-            JSONObject result = json.getJSONObject("result");
-            String filePath = result.getString("file_path");
-
-            File localFile = new File("src/main/resources/saved_files/" + fileUniqueId);
-            InputStream is = new URL("https://api.telegram.org/file/bot" + BOT_TOKEN + "/" + filePath).openStream();
-            FileUtils.copyInputStreamToFile(is, localFile);
-            System.out.println(LocalDateTime.now() + " file \"" + fileUniqueId + "\" is saved");
-            response = "Файла: \"" + fileUniqueId + "\",  сохранён";
-        } catch (IOException exception) {
-            System.out.println(LocalDateTime.now() + " file \"" + fileUniqueId + "\" is NOT saved");
-            response = "Ошибка при сохранении файла: " + fileUniqueId;
+            org.telegram.telegrambots.meta.api.objects.File file = this.execute(getFile);//tg file obj
+            this.downloadFile(file, new java.io.File("photos/" + fileName));
+            System.out.println(LocalDateTime.now() + " file \"" + fileName + "\" is saved");
+            response = "Файла: \"" + fileName + "\",  сохранён";
+            count++;
+        } catch (TelegramApiException e) {
+            System.out.println(LocalDateTime.now() + " file \"" + fileName + "\" is NOT saved");
+            response = "Ошибка при сохранении файла: " + fileName;
         }
+
         return response;
     }
 
@@ -157,77 +150,4 @@ public class Bot extends TelegramLongPollingBot {
 
         return response;
     }
-
-    //    private static ChatGPTService service;
-//    private static Environment env;
-
-//    @Override
-//    /**
-//     * Action invoked when the user sends a message to the chat.
-//     */
-//    public void onUpdateReceived(Update update) {
-//        SendMessage sendMessage = new SendMessage();
-//        String text = update.getMessage().getText();
-//        String chatId = String.valueOf(update.getMessage().getChatId());
-//
-//        pong(sendMessage, chatId, text);
-//
-//        askGpt(sendMessage, chatId, text);
-//    }
-//
-//    /**
-//     * Sends your request to chatGPT using #ChatGPTService.askChatGPT
-//     *
-//     * @param sendMessage
-//     * @param chatId
-//     * @param text
-//     */
-//    private void askGpt(SendMessage sendMessage, String chatId, String text) {
-//
-//        String gptResponse = service.askChatGPTText(text);
-//        try {
-//            sendMessage.setChatId(chatId);
-//            sendMessage.setText("GPT answers: " + gptResponse);
-//            execute(sendMessage);
-//        } catch (TelegramApiException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-//
-//    /**
-//     * Gives a feedback about what you are requesting to chatGPT
-//     *
-//     * @param sendMessage
-//     * @param chatId
-//     * @param text
-//     */
-//    private void pong(SendMessage sendMessage, String chatId, String text) {
-//        sendMessage.setText("Hello! I'm sending this message to chatGPT: " + text);
-//        try {
-//            sendMessage.setChatId(chatId);
-//            execute(sendMessage);
-//        } catch (TelegramApiException e) {
-//            e.printStackTrace();
-//        }
-//    }
-//
-//    @Override
-//    public String getBotUsername() {
-//        return BOT_NAME;
-//    }
-//
-//    @Override
-//    public String getBotToken() {
-//        return BOT_TOKEN;
-//    }
-//
-//    @Autowired
-//    public void setService(ChatGPTService service) {
-//        this.service = service;
-//    }
-//
-//    @Autowired
-//    public void setEnv(Environment env) {
-//        Bot.env = env;
-//    }
 }
