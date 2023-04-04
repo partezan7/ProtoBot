@@ -15,10 +15,9 @@ public class ProtoBotApplication {
         propertiesLoader.load();
         try {
             TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
-            telegramBotsApi.registerBot(new Bot());
+            telegramBotsApi.registerBot(Bot.getBot());
         } catch (TelegramApiException e) {
             e.printStackTrace();
         }
     }
-
 }

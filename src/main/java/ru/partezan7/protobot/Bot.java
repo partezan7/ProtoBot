@@ -2,6 +2,8 @@ package ru.partezan7.protobot;
 
 import org.apache.commons.io.FileUtils;
 import org.json.JSONObject;
+import org.jsoup.Jsoup;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
@@ -11,19 +13,27 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import ru.partezan7.protobot.repository.MessageRepository;
 
 
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
 public class Bot extends TelegramLongPollingBot {
-    //создаем две константы, присваиваем им значения токена и имя бота соответсвтенно
-    //вместо звездочек подставляйте свои данные
+    @Autowired
+    private MessageRepository repository;
     final private String BOT_TOKEN = System.getProperty("bot.BOT_TOKEN");
     final private String BOT_NAME = System.getProperty("bot.BOT_NAME");
+    private static Bot bot;
+
+    public static Bot getBot() {
+        if (bot == null) bot = new Bot();
+        return bot;
+    }
 
     @Override
     public String getBotUsername() {
@@ -139,15 +149,44 @@ public class Bot extends TelegramLongPollingBot {
 
     public String saveText(String textMsg) {
         String response;
+        try {
+            URL url = new URL(textMsg);
+            response = saveLink(url);
+        } catch (IOException exception) {
+            //Сравниваем текст пользователя с нашими командами, на основе этого формируем ответ
+            if (textMsg.equals("/start"))
+                response = "Жми /get, чтобы получить случайное число от 1 до 100";
+            else if (textMsg.equals("/get"))
+                response = Double.toString(Math.random() * 100);
+            else
+                response = "Сообщение не сохранено";
+        }
+        return response;
+    }
 
-        //Сравниваем текст пользователя с нашими командами, на основе этого формируем ответ
-        if (textMsg.equals("/start"))
-            response = "Жми /get, чтобы получить случайное число от 1 до 100";
-        else if (textMsg.equals("/get"))
-            response = Double.toString(Math.random() * 100);
-        else
-            response = "Сообщение не сохранено";
+    private String saveLink(URL url) throws IOException {
+        String response;
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0");
+        int responseCode = connection.getResponseCode();
+        if (responseCode == HttpURLConnection.HTTP_OK) { // success
+            BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String inputLine;
+            StringBuffer resp = new StringBuffer();
 
+            while ((inputLine = in.readLine()) != null) {
+                resp.append(inputLine);
+            }
+            in.close();
+            org.jsoup.nodes.Document html = Jsoup.parse(resp.toString());
+            String title = html.title();
+            response = "Ссылка сохранена. Заголовок: " + title;
+            System.out.println(title);
+        } else {
+            response = "Ссылка не сохранена. Ошибка: " + responseCode;
+        }
+        System.out.println(response);
         return response;
     }
 }
