@@ -20,18 +20,22 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Component
 public class Bot extends TelegramLongPollingBot {
-    @Autowired
-    private MessageRepository repository;
+    private final MessageRepository repository;
     final private String BOT_TOKEN = System.getProperty("bot.BOT_TOKEN");
     final private String BOT_NAME = System.getProperty("bot.BOT_NAME");
     private static Bot bot;
 
-    public static Bot getBot() {
-        if (bot == null) bot = new Bot();
+    public Bot(MessageRepository repository) {
+        this.repository = repository;
+    }
+
+    public static Bot getBot(MessageRepository repository) {
+        if (bot == null) bot = new Bot(repository);
         return bot;
     }
 
@@ -181,8 +185,12 @@ public class Bot extends TelegramLongPollingBot {
             in.close();
             org.jsoup.nodes.Document html = Jsoup.parse(resp.toString());
             String title = html.title();
+            ru.partezan7.protobot.entity.Message newMessage = new ru.partezan7.protobot.entity.Message();
+            newMessage.setLink(url.toString());
+            newMessage.setHeader(title);
+            newMessage.setTime(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+            repository.save(newMessage);
             response = "Ссылка сохранена. Заголовок: " + title;
-            System.out.println(title);
         } else {
             response = "Ссылка не сохранена. Ошибка: " + responseCode;
         }
