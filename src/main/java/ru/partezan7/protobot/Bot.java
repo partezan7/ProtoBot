@@ -3,7 +3,6 @@ package ru.partezan7.protobot;
 import org.apache.commons.io.FileUtils;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
@@ -58,40 +57,44 @@ public class Bot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         try {
             if (update.hasMessage()) {
-                //Извлекаем из объекта сообщение пользователя
-                Message message = update.getMessage();
-                //Достаем из inMess id чата пользователя
-                String chatId = message.getChatId().toString();
-
-                String responseBody = "Ошибка сохранения: формат сообщения не определён";
-                if (message.hasText()) {
-                    //Получаем текст сообщения пользователя, отправляем в написанный нами обработчик
-                    responseBody = saveText(message.getText());
-                }
-                if (message.hasDocument()) {
-                    responseBody = saveDocument(message.getDocument());
-                }
-                if (message.hasPhoto()) {
-                    List<PhotoSize> photos = message.getPhoto();
-                    if (photos != null && photos.size() > 0) {
-                        PhotoSize photoSize = message.getPhoto().get(3); // Max size
-                        responseBody = savePhoto(photoSize);
-                    }
-                }
-
-                //Создаем объект класса SendMessage - наш будущий ответ пользователю
-                SendMessage response = new SendMessage();
-                //Добавляем в наше сообщение id чата а также наш ответ
-                response.setChatId(chatId);
-                response.setText(responseBody);
-
-                //Отправка в чат
-                execute(response);
+                processMessage(update.getMessage());
             }
 
         } catch (TelegramApiException exception) {
             exception.printStackTrace();
         }
+    }
+
+    private void processMessage(Message message) throws TelegramApiException {
+        StringBuilder responseBody = new StringBuilder();
+
+        if (message.hasText()) {
+            //Получаем текст сообщения пользователя, отправляем в написанный нами обработчик
+            responseBody.append(processText(message.getText())) ;
+        }
+
+        if (message.hasDocument()) {
+            if (!responseBody.isEmpty()) responseBody.append("\n");
+            responseBody.append(saveDocument(message.getDocument()));
+        }
+
+        if (message.hasPhoto()) {
+            PhotoSize photoSize = message.getPhoto().get(3); // Max size
+            if (!responseBody.isEmpty()) responseBody.append("\n");
+            responseBody.append(savePhoto(photoSize));
+        }
+
+        //Создаем объект класса SendMessage - наш будущий ответ пользователю
+        SendMessage response = new SendMessage();
+        //Достаем из inMess id чата пользователя
+        String chatId = message.getChatId().toString();
+        //Добавляем в наше сообщение id чата а также наш ответ
+        response.setChatId(chatId);
+        if (responseBody.isEmpty()) responseBody.append("Ошибка сохранения: формат сообщения не определён");
+        response.setText(responseBody.toString());
+
+        //Отправка в чат
+        execute(response);
     }
 
     private static int count = 1;
@@ -151,7 +154,7 @@ public class Bot extends TelegramLongPollingBot {
         super.onUpdatesReceived(updates);
     }
 
-    public String saveText(String textMsg) {
+    public String processText(String textMsg) {
         String response;
         try {
             URL url = new URL(textMsg);
